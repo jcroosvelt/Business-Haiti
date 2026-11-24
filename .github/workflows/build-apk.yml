@@ -34,6 +34,19 @@ jobs:
           cp -r "$RUNNER_TEMP/scaffold/android" statuts_app/android
           sed -i 's/android:label="[^"]*"/android:label="Statuts"/' statuts_app/android/app/src/main/AndroidManifest.xml
 
+      # Certains plugins sont compilés avec un compileSdk trop ancien : on force 36 partout.
+      - name: Forcer compileSdk 36
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/compilesdk.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate { p ->
+              def android = p.extensions.findByName("android")
+              if (android != null) { android.compileSdkVersion(36) }
+            }
+          }
+          GRADLE
+
       - name: Dépendances
         working-directory: statuts_app
         run: flutter pub get
