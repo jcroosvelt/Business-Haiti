@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#075e54">
+<title>Planificateur de Statuts</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<style>
+:root{
+  --bg:#f0f2f5;--card:#fff;--ink:#111b21;--muted:#667781;--line:#e2e6e9;
+  --green:#075e54;--accent:#25d366;--accent-ink:#04361f;--danger:#c62828;--warn:#b26a00;--warn-bg:#fff4e0;
+  --ok-bg:#e3f7ea;--radius:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0b141a;--card:#1f2c34;--ink:#e9edef;--muted:#8696a0;--line:#2a3942;--green:#128c7e;--accent-ink:#04361f;--warn-bg:#3a2d12;--ok-bg:#123325}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+button,input,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--green);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:10px}
+header h1{font-size:1.1rem;margin:0;flex:1}
+header button{background:transparent;border:0;color:#fff;font-size:1.3rem;padding:6px 8px;border-radius:8px}
+main{max-width:640px;margin:0 auto;padding:16px}
+.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
+.tabs button{flex:1;background:none;border:0;padding:10px 4px 8px;font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+.tabs button span{font-size:1.35rem}
+.tabs button.on{color:var(--green);font-weight:600}
+.badge{background:var(--danger);color:#fff;border-radius:99px;font-size:.7rem;padding:0 6px;margin-left:4px}
+h2{font-size:1rem;margin:20px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+h2:first-child{margin-top:0}
+.card{background:var(--card);border-radius:var(--radius);padding:12px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.thumbs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;scrollbar-width:none}
+.thumbs::-webkit-scrollbar{display:none}
+.th{position:relative;flex:0 0 auto;width:96px;height:128px;border-radius:10px;overflow:hidden;background:#000}
+.th.big{width:140px;height:186px}
+.th img,.th video{width:100%;height:100%;object-fit:cover;display:block}
+.th .tag{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:.7rem;padding:1px 6px;border-radius:6px}
+.th .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);color:#fff;border:0;border-radius:50%;width:26px;height:26px;line-height:1}
+.cap{white-space:pre-wrap;word-break:break-word;margin:0 0 8px}
+.meta{font-size:.82rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.pill{border-radius:99px;padding:1px 9px;font-size:.75rem;font-weight:600}
+.pill.late{background:var(--warn-bg);color:var(--warn)}
+.pill.today{background:var(--ok-bg);color:var(--green)}
+.pill.done{background:var(--line);color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:600;background:var(--line);cursor:pointer}
+.btn.wa{background:var(--accent);color:var(--accent-ink);flex:1 1 100%;font-size:1.05rem;padding:14px}
+.btn.sec{flex:1}
+.btn.danger{color:var(--danger)}
+.btn.primary{background:var(--green);color:#fff}
+.btn:disabled{opacity:.5}
+.empty{text-align:center;color:var(--muted);padding:40px 16px}
+.empty b{display:block;font-size:2.4rem;margin-bottom:6px}
+label{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
+input[type=date],input[type=time],input[type=password],input[type=text],textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+textarea{min-height:110px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.drop{border:2px dashed var(--line);border-radius:var(--radius);padding:22px;text-align:center;color:var(--muted);background:var(--card)}
+.drop b{color:var(--green)}
+.hint{font-size:.8rem;color:var(--muted);margin:6px 0 0}
+.note{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:.85rem;margin-bottom:12px}
+.chips{display:flex;gap:6px;margin-bottom:12px}
+.chips button{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 14px;font-size:.85rem}
+.chips button.on{background:var(--green);color:#fff;border-color:var(--green)}
+#lock{position:fixed;inset:0;background:var(--green);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+#lock .box{background:var(--card);border-radius:20px;padding:24px;width:100%;max-width:340px;text-align:center}
+#lock h2{font-size:1.2rem;text-transform:none;letter-spacing:0;color:var(--ink);margin:0 0 6px}
+#lock p{color:var(--muted);margin:0 0 14px;font-size:.9rem}
+#lock input{text-align:center;font-size:1.4rem;letter-spacing:.4em;margin-bottom:10px}
+#lock .err{color:var(--danger);min-height:1.2em;font-size:.85rem;margin-bottom:8px}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111b21;color:#fff;padding:10px 16px;border-radius:99px;font-size:.88rem;z-index:60;max-width:90%;text-align:center}
+.hidden{display:none!important}
+dialog{border:0;border-radius:18px;padding:20px;max-width:360px;width:calc(100% - 32px);background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h3{margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<div id="lock" class="hidden">
+  <form class="box" id="lockForm" autocomplete="off">
+    <h2 id="lockTitle">Accès privé</h2>
+    <p id="lockSub">Entrez votre code</p>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="••••" aria-label="Code">
+    <input id="pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Confirmer" class="hidden" aria-label="Confirmer le code">
+    <div class="err" id="lockErr"></div>
+    <button class="btn primary" style="width:100%" type="submit" id="lockBtn">Entrer</button>
+  </form>
+</div>
+
+<header>
+  <h1 id="title">Aujourd'hui</h1>
+  <button id="lockNow" title="Verrouiller" aria-label="Verrouiller">🔒</button>
+</header>
+
+<main id="view"></main>
+
+<nav class="tabs">
+  <button data-tab="today" class="on"><span>📲</span>Aujourd'hui<i id="badge"></i></button>
+  <button data-tab="plan"><span>🗓️</span>Planning</button>
+  <button data-tab="new"><span>➕</span>Ajouter</button>
+</nav>
+
+<dialog id="dlg"></dialog>
+
+<script>
+'use strict';
+/* ---------- Utilitaires ---------- */
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayStr=()=>ymd(new Date());
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate=s=>{const [y,m,d]=s.split('-').map(Number);const t=new Date(y,m-1,d);
+  return t.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});};
+const fmtSize=b=>b>1048576?(b/1048576).toFixed(1)+' Mo':Math.round(b/1024)+' Ko';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),2600);}
+
+/* ---------- Stockage local (IndexedDB) : les médias restent dans le navigateur ---------- */
+const DB={
+  db:null,
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open('statuts',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('posts',{keyPath:'id'});
+    r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error);});},
+  tx(mode,fn){return new Promise((res,rej)=>{const t=this.db.transaction('posts',mode);const s=t.objectStore('posts');
+    const q=fn(s);t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);});},
+  all(){return this.tx('readonly',s=>s.getAll())},
+  put(p){return this.tx('readwrite',s=>s.put(p))},
+  del(id){return this.tx('readwrite',s=>s.delete(id))}
+};
+
+/* ---------- Code d'accès (privé) ---------- */
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('statuts|'+t));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+const store={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+let unlocked=false, idleT;
+function showLock(){
+  unlocked=false;clearObjectUrls();
+  const has=!!store.get('pinhash');
+  $('#lock').classList.remove('hidden');
+  $('#lockTitle').textContent=has?'Accès privé':'Créer votre code';
+  $('#lockSub').textContent=has?'Entrez votre code':'Choisissez un code (4 chiffres minimum)';
+  $('#pin2').classList.toggle('hidden',has);
+  $('#lockBtn').textContent=has?'Entrer':'Enregistrer';
+  $('#pin').value=$('#pin2').value='';$('#lockErr').textContent='';
+  setTimeout(()=>$('#pin').focus(),50);
+}
+$('#lockForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const v=$('#pin').value, has=store.get('pinhash');
+  if(has){
+    if(await sha(v)===has){$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();}
+    else{$('#lockErr').textContent='Code incorrect';$('#pin').value='';}
+  }else{
+    if(v.length<4)return $('#lockErr').textContent='Au moins 4 caractères';
+    if(v!==$('#pin2').value)return $('#lockErr').textContent='Les codes ne correspondent pas';
+    store.set('pinhash',await sha(v));$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();
+  }
+});
+$('#lockNow').onclick=showLock;
+function resetIdle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(unlocked)showLock()},5*60*1000);}
+['click','touchstart','keydown'].forEach(ev=>addEventListener(ev,()=>unlocked&&resetIdle(),{passive:true}));
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&unlocked){hiddenAt=Date.now()}else if(!document.hidden&&unlocked&&hiddenAt&&Date.now()-hiddenAt>60000)showLock();});
+let hiddenAt=0;
+
+/* ---------- Rendu ---------- */
+let tab='today', filter='todo', urls=[];
+function objUrl(b){const u=URL.createObjectURL(b);urls.push(u);return u;}
+function clearObjectUrls(){urls.forEach(URL.revokeObjectURL);urls=[];}
+const titles={today:"Aujourd'hui",plan:'Planning',new:'Nouveau statut',edit:'Modifier'};
+
+function thumbs(p,big){
+  return `<div class="thumbs">${p.files.map(f=>{
+    const u=objUrl(f.blob);const v=f.type.startsWith('video/');
+    return `<div class="th ${big?'big':''}">${v?`<video src="${u}#t=0.1" muted playsinline preload="metadata"></video>`:`<img src="${u}" alt="">`}<span class="tag">${v?'🎬 ':'🖼️ '}${fmtSize(f.blob.size)}</span></div>`;
+  }).join('')}</div>`;
+}
+function postCard(p,{big=false}={}){
+  const t=todayStr(), late=!p.done&&p.date<t, isToday=p.date===t;
+  const pill=p.done?'<span class="pill done">✓ Publié</span>':late?'<span class="pill late">En retard</span>':isToday?'<span class="pill today">Aujourd\'hui</span>':'';
+  return `<div class="card" data-id="${p.id}">
+    ${thumbs(p,big)}
+    ${p.caption?`<p class="cap">${esc(p.caption)}</p>`:''}
+    <div class="meta">${pill}<span>${esc(fmtDate(p.date))}${p.time?' · '+esc(p.time):''}</span></div>
+    <div class="row">
+      ${p.done?`<button class="btn sec" data-a="undo">↩︎ Remettre à publier</button>`
+              :`<button class="btn wa" data-a="share">📤 Partager sur WhatsApp</button>
+                ${p.caption?`<button class="btn sec" data-a="copy">📋 Copier la légende</button>`:''}
+                <button class="btn sec" data-a="done">✓ Marquer publié</button>`}
+      <button class="btn sec" data-a="edit">✏️</button>
+      <button class="btn sec danger" data-a="del">🗑️</button>
+    </div></div>`;
+}
+
+async function render(){
+  if(!unlocked)return;
+  clearObjectUrls();
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===(tab==='edit'?'new':tab)));
+  $('#title').textContent=titles[tab];
+  const posts=(await DB.all()).sort((a,b)=>(a.date+(a.time||'99'))<(b.date+(b.time||'99'))?-1:1);
+  const t=todayStr();
+  const due=posts.filter(p=>!p.done&&p.date<=t);
+  $('#badge').outerHTML=`<i id="badge">${due.length?`<span class="badge">${due.length}</span>`:''}</i>`;
+  const v=$('#view');
+  if(tab==='today'){
+    const doneToday=posts.filter(p=>p.done&&p.doneAt&&ymd(new Date(p.doneAt))===t);
+    const next=posts.find(p=>!p.done&&p.date>t);
+    v.innerHTML=
+      (due.length?`<h2>À publier (${due.length})</h2>`+due.map(p=>postCard(p,{big:true})).join('')
+        :`<div class="empty"><b>🎉</b>Rien à publier aujourd'hui.${next?`<br>Prochain statut : ${esc(fmtDate(next.date))}`:''}</div>`)
+      +(doneToday.length?`<h2>Publiés aujourd'hui</h2>`+doneToday.map(p=>postCard(p)).join(''):'');
+  }else if(tab==='plan'){
+    const list=posts.filter(p=>filter==='todo'?!p.done:filter==='done'?p.done:true);
+    if(filter==='done')list.reverse();
+    let html=`<div class="chips">${[['todo','À publier'],['done','Publiés'],['all','Tous']].map(([k,l])=>`<button data-f="${k}" class="${filter===k?'on':''}">${l}</button>`).join('')}</div>`;
+    if(!list.length)html+=`<div class="empty"><b>🗓️</b>Aucun statut ici.</div>`;
+    let last='';
+    for(const p of list){if(p.date!==last){html+=`<h2>${esc(fmtDate(p.date))}</h2>`;last=p.date;}html+=postCard(p);}
+    v.innerHTML=html;
+  }else{renderForm(v);}
+  persistNote();
+}
+let noteShown=false;
+async function persistNote(){
+  if(noteShown||!navigator.storage?.persist)return;noteShown=true;
+  try{if(!await navigator.storage.persisted())await navigator.storage.persist();}catch{}
+}
+
+/* ---------- Formulaire ajout / modification ---------- */
+let draft=null;
+function renderForm(v){
+  if(!draft)draft={id:null,files:[],caption:'',date:todayStr(),time:''};
+  const d=draft;
+  v.innerHTML=`
+    <div class="note">📌 Les photos/vidéos sont gardées <b>dans ce navigateur</b> (rien n'est envoyé sur internet). N'effacez pas les données du site.</div>
+    <label>Photos / vidéos</label>
+    <div id="fthumbs">${d.files.length?`<div class="thumbs">${d.files.map((f,i)=>{const u=objUrl(f.blob);const vid=f.type.startsWith('video/');
+      return `<div class="th">${vid?`<video src="${u}#t=0.1" muted playsinline preload="metadata"></video>`:`<img src="${u}" alt="">`}<span class="tag">${fmtSize(f.blob.size)}</span><button class="x" data-rm="${i}" aria-label="Retirer">×</button></div>`}).join('')}</div>`:''}</div>
+    <label class="drop" for="files" style="display:block;font-weight:400"><b>Choisir des photos ou vidéos</b><br><small>Plusieurs fichiers possibles</small></label>
+    <input id="files" type="file" accept="image/*,video/*" multiple class="hidden">
+    <p class="hint">WhatsApp limite les statuts vidéo à ~90 secondes.</p>
+    <label for="cap">Légende / texte</label>
+    <textarea id="cap" placeholder="Votre texte, prix, contact…">${esc(d.caption)}</textarea>
+    <div class="two"><div><label for="date">Date de publication</label><input id="date" type="date" value="${d.date}"></div>
+    <div><label for="time">Heure (rappel)</label><input id="time" type="time" value="${d.time||''}"></div></div>
+    <div class="row" style="margin-top:20px">
+      <button class="btn primary" style="flex:1" id="save">${d.id?'Enregistrer':'Planifier'}</button>
+      ${d.id?'<button class="btn" id="cancel">Annuler</button>':''}
+    </div>`;
+  $('#files').onchange=e=>{
+    for(const f of e.target.files)d.files.push({name:f.name,type:f.type||'application/octet-stream',blob:f});
+    syncDraft();renderForm(v);
+  };
+  v.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{syncDraft();d.files.splice(+b.dataset.rm,1);renderForm(v);});
+  $('#save').onclick=async()=>{
+    syncDraft();
+    if(!d.files.length&&!d.caption.trim())return toast('Ajoutez une photo, une vidéo ou un texte');
+    if(!d.date)return toast('Choisissez une date');
+    const old=d.id?(await DB.all()).find(p=>p.id===d.id):null;
+    await DB.put({id:d.id||uid(),files:d.files,caption:d.caption.trim(),date:d.date,time:d.time,done:old?.done||false,doneAt:old?.doneAt||null,created:old?.created||Date.now()});
+    toast(d.id?'Modifié ✓':'Planifié ✓');draft=null;tab='plan';filter='todo';render();
+  };
+  if($('#cancel'))$('#cancel').onclick=()=>{draft=null;tab='plan';render();};
+}
+function syncDraft(){if(!draft)return;const c=$('#cap'),d=$('#date'),t=$('#time');if(c)draft.caption=c.value;if(d)draft.date=d.value;if(t)draft.time=t.value;}
+
+/* ---------- Partage WhatsApp ---------- */
+async function sharePost(p){
+  const files=p.files.map((f,i)=>new File([f.blob],f.name||`statut-${i+1}`,{type:f.type}));
+  const text=p.caption||'';
+  // 1) Partage natif avec fichiers (Android/iOS) → choisir WhatsApp puis « Mon statut »
+  if(files.length&&navigator.canShare&&navigator.canShare({files})){
+    try{
+      if(text&&navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});
+      await navigator.share({files,text});
+      return askDone(p);
+    }catch(e){if(e.name==='AbortError')return;}
+  }
+  // 2) Texte seul → lien WhatsApp
+  if(!files.length){window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');return askDone(p);}
+  // 3) Repli : télécharger les fichiers (ordinateur) puis ouvrir WhatsApp Web
+  files.forEach(f=>{const a=document.createElement('a');a.href=objUrl(f);a.download=f.name;document.body.append(a);a.click();a.remove();});
+  if(text&&navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});
+  toast('Fichiers téléchargés — ajoutez-les à votre statut');
+  setTimeout(()=>askDone(p),800);
+}
+function askDone(p){
+  const dlg=$('#dlg');
+  dlg.innerHTML=`<h3>Statut publié ?</h3><p>Avez-vous publié ce statut sur WhatsApp ?</p>
+    <div class="row"><button class="btn wa" id="y" style="flex:1 1 100%">✓ Oui, marquer comme publié</button><button class="btn" id="n" style="flex:1">Pas encore</button></div>`;
+  dlg.showModal();
+  $('#y').onclick=async()=>{dlg.close();await markDone(p.id,true);};
+  $('#n').onclick=()=>dlg.close();
+}
+async function markDone(id,done){
+  const p=(await DB.all()).find(x=>x.id===id);if(!p)return;
+  p.done=done;p.doneAt=done?Date.now():null;await DB.put(p);toast(done?'Publié ✓':'Remis à publier');render();
+}
+
+/* ---------- Actions sur les cartes ---------- */
+$('#view').addEventListener('click',async e=>{
+  const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;return render();}
+  const b=e.target.closest('[data-a]');if(!b)return;
+  const id=b.closest('.card').dataset.id;
+  const p=(await DB.all()).find(x=>x.id===id);if(!p)return;
+  switch(b.dataset.a){
+    case 'share':return sharePost(p);
+    case 'copy':try{await navigator.clipboard.writeText(p.caption);toast('Légende copiée ✓')}catch{toast('Copie impossible')}return;
+    case 'done':return markDone(id,true);
+    case 'undo':return markDone(id,false);
+    case 'edit':draft={...p,files:[...p.files]};tab='edit';return render();
+    case 'del':{
+      const dlg=$('#dlg');dlg.innerHTML=`<h3>Supprimer ce statut ?</h3><p>Les fichiers seront effacés de l'appli.</p>
+        <div class="row"><button class="btn danger" id="y" style="flex:1">Supprimer</button><button class="btn" id="n" style="flex:1">Annuler</button></div>`;
+      dlg.showModal();$('#n').onclick=()=>dlg.close();
+      $('#y').onclick=async()=>{dlg.close();await DB.del(id);toast('Supprimé');render();};
+    }
+  }
+});
+
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  if(tab==='new'||tab==='edit')syncDraft();
+  if(b.dataset.tab==='new'&&tab!=='edit')draft=null;
+  tab=b.dataset.tab;render();
+});
+
+/* ---------- Démarrage ---------- */
+(async()=>{
+  try{await DB.open();}catch{document.body.innerHTML='<p style="padding:24px">Stockage local indisponible (navigation privée ?). Ouvrez l\'appli dans un onglet normal.</p>';return;}
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  showLock();
+})();
+</script>
+</body>
+</html>
