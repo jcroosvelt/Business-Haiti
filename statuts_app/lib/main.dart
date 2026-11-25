@@ -601,7 +601,9 @@ class _PostFormState extends State<PostForm> {
     }
     if (paths.isEmpty) return _msg('Impossible de lire les fichiers choisis');
     if (paths.length > room) _msg('Seuls $room fichiers ajoutés (maximum $kMaxFiles)');
-    setState(() => picked.addAll(paths.take(room)));
+    final added = paths.take(room).toList();
+    setState(() => picked.addAll(added));
+    _msg('${added.length} fichier${added.length > 1 ? 's' : ''} ajouté${added.length > 1 ? 's' : ''} (${picked.length + existing.length}/$kMaxFiles)');
   }
 
   void _msg(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
