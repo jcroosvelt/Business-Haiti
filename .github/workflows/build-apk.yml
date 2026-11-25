@@ -45,6 +45,12 @@ jobs:
               if (android != null) { android.compileSdkVersion(36) }
             }
           }
+          // Le lint de release plante sur certains plugins (bug de l'outil) : inutile pour produire l'APK.
+          allprojects {
+            tasks.configureEach { t ->
+              if (t.name.startsWith("lintVital") || t.name.startsWith("lintAnalyze") || t.name.startsWith("lintReport")) { t.enabled = false }
+            }
+          }
           GRADLE
 
       - name: Dépendances
