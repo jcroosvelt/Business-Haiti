@@ -168,6 +168,16 @@ function resetIdle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(unlocked)showL
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&unlocked){hiddenAt=Date.now()}else if(!document.hidden&&unlocked&&hiddenAt&&Date.now()-hiddenAt>60000)showLock();});
 let hiddenAt=0;
 
+/* ---------- Récurrence ---------- */
+const JOURS=['dim','lun','mar','mer','jeu','ven','sam']; // getDay() : 0 = dimanche
+const isRec=p=>!!p.repeat&&p.repeat!=='none';
+const runsOn=(p,d)=>p.repeat==='daily'||(p.repeat==='days'&&(p.days||[]).includes(d.getDay()));
+const doneOn=(p,ds)=>isRec(p)?(p.doneDates||[]).includes(ds):p.done;
+function dueOn(p,d){const ds=ymd(d);
+  if(isRec(p))return p.date<=ds&&runsOn(p,d)&&!(p.doneDates||[]).includes(ds);
+  return !p.done&&p.date<=ds;}
+const repLabel=p=>p.repeat==='daily'?'Chaque jour':[...(p.days||[])].sort((a,b)=>((a+6)%7)-((b+6)%7)).map(i=>JOURS[i]).join(', ');
+
 /* ---------- Rendu ---------- */
 let tab='today', filter='todo', urls=[];
 function objUrl(b){const u=URL.createObjectURL(b);urls.push(u);return u;}
@@ -181,14 +191,15 @@ function thumbs(p,big){
   }).join('')}</div>`;
 }
 function postCard(p,{big=false}={}){
-  const t=todayStr(), late=!p.done&&p.date<t, isToday=p.date===t;
-  const pill=p.done?'<span class="pill done">✓ Publié</span>':late?'<span class="pill late">En retard</span>':isToday?'<span class="pill today">Aujourd\'hui</span>':'';
+  const t=todayStr(), rec=isRec(p), isDone=doneOn(p,t);
+  const late=!rec&&!p.done&&p.date<t, isToday=!rec&&p.date===t;
+  const pill=(rec?`<span class="pill today">🔁 ${esc(repLabel(p))}</span>`:'')+(isDone?`<span class="pill done">✓ Publié${rec?' aujourd\'hui':''}</span>`:late?'<span class="pill late">En retard</span>':isToday?'<span class="pill today">Aujourd\'hui</span>':'');
   return `<div class="card" data-id="${p.id}">
     ${thumbs(p,big)}
     ${p.caption?`<p class="cap">${esc(p.caption)}</p>`:''}
-    <div class="meta">${pill}<span>${esc(fmtDate(p.date))}${p.time?' · '+esc(p.time):''}</span></div>
+    <div class="meta">${pill}<span>${rec?'Dès le ':''}${esc(fmtDate(p.date))}${p.time?' · '+esc(p.time):''}</span></div>
     <div class="row">
-      ${p.done?`<button class="btn sec" data-a="undo">↩︎ Remettre à publier</button>`
+      ${isDone?`<button class="btn sec" data-a="undo">↩︎ Remettre à publier</button>`
               :`<button class="btn wa" data-a="share">📤 Partager sur WhatsApp</button>
                 ${p.caption?`<button class="btn sec" data-a="copy">📋 Copier la légende</button>`:''}
                 <button class="btn sec" data-a="done">✓ Marquer publié</button>`}
@@ -204,21 +215,23 @@ async function render(){
   $('#title').textContent=titles[tab];
   const posts=(await DB.all()).sort((a,b)=>(a.date+(a.time||'99'))<(b.date+(b.time||'99'))?-1:1);
   const t=todayStr();
-  const due=posts.filter(p=>!p.done&&p.date<=t);
+  const due=posts.filter(p=>dueOn(p,new Date()));
   $('#badge').outerHTML=`<i id="badge">${due.length?`<span class="badge">${due.length}</span>`:''}</i>`;
   const v=$('#view');
   if(tab==='today'){
-    const doneToday=posts.filter(p=>p.done&&p.doneAt&&ymd(new Date(p.doneAt))===t);
-    const next=posts.find(p=>!p.done&&p.date>t);
+    const doneToday=posts.filter(p=>isRec(p)?(p.doneDates||[]).includes(t):p.done&&p.doneAt&&ymd(new Date(p.doneAt))===t);
+    const next=posts.find(p=>!isRec(p)&&!p.done&&p.date>t);
     v.innerHTML=
       (due.length?`<h2>À publier (${due.length})</h2>`+due.map(p=>postCard(p,{big:true})).join('')
         :`<div class="empty"><b>🎉</b>Rien à publier aujourd'hui.${next?`<br>Prochain statut : ${esc(fmtDate(next.date))}`:''}</div>`)
       +(doneToday.length?`<h2>Publiés aujourd'hui</h2>`+doneToday.map(p=>postCard(p)).join(''):'');
   }else if(tab==='plan'){
-    const list=posts.filter(p=>filter==='todo'?!p.done:filter==='done'?p.done:true);
+    const recs=filter==='done'?[]:posts.filter(isRec);
+    const list=posts.filter(p=>!isRec(p)&&(filter==='todo'?!p.done:filter==='done'?p.done:true));
     if(filter==='done')list.reverse();
     let html=`<div class="chips">${[['todo','À publier'],['done','Publiés'],['all','Tous']].map(([k,l])=>`<button data-f="${k}" class="${filter===k?'on':''}">${l}</button>`).join('')}</div>`;
-    if(!list.length)html+=`<div class="empty"><b>🗓️</b>Aucun statut ici.</div>`;
+    if(recs.length)html+=`<h2>🔁 Statuts récurrents</h2>`+recs.map(postCard).join('');
+    if(!list.length&&!recs.length)html+=`<div class="empty"><b>🗓️</b>Aucun statut ici.</div>`;
     let last='';
     for(const p of list){if(p.date!==last){html+=`<h2>${esc(fmtDate(p.date))}</h2>`;last=p.date;}html+=postCard(p);}
     v.innerHTML=html;
@@ -234,7 +247,7 @@ async function persistNote(){
 /* ---------- Formulaire ajout / modification ---------- */
 let draft=null;
 function renderForm(v){
-  if(!draft)draft={id:null,files:[],caption:'',date:todayStr(),time:''};
+  if(!draft)draft={id:null,files:[],caption:'',date:todayStr(),time:'',repeat:'none',days:[]};
   const d=draft;
   v.innerHTML=`
     <div class="note">📌 Les photos/vidéos sont gardées <b>dans ce navigateur</b> (rien n'est envoyé sur internet). N'effacez pas les données du site.</div>
@@ -246,7 +259,11 @@ function renderForm(v){
     <p class="hint">WhatsApp limite les statuts vidéo à ~90 secondes.</p>
     <label for="cap">Légende / texte</label>
     <textarea id="cap" placeholder="Votre texte, prix, contact…">${esc(d.caption)}</textarea>
-    <div class="two"><div><label for="date">Date de publication</label><input id="date" type="date" value="${d.date}"></div>
+    <label>Répétition</label>
+    <div class="chips" id="rep">${[['none','Une fois'],['daily','Chaque jour'],['days','Jours choisis']].map(([k,l])=>`<button type="button" data-rep="${k}" class="${d.repeat===k?'on':''}">${l}</button>`).join('')}</div>
+    ${d.repeat==='days'?`<div class="chips" style="flex-wrap:wrap">${[1,2,3,4,5,6,0].map(i=>`<button type="button" data-day="${i}" class="${(d.days||[]).includes(i)?'on':''}">${JOURS[i]}</button>`).join('')}</div>`:''}
+    ${d.repeat!=='none'?`<p class="hint">Ce statut réapparaît dans « Aujourd'hui » chaque matin prévu et reste dans l'appli pour être republié.</p>`:''}
+    <div class="two"><div><label for="date">${d.repeat==='none'?'Date de publication':'À partir du'}</label><input id="date" type="date" value="${d.date}"></div>
     <div><label for="time">Heure (rappel)</label><input id="time" type="time" value="${d.time||''}"></div></div>
     <div class="row" style="margin-top:20px">
       <button class="btn primary" style="flex:1" id="save">${d.id?'Enregistrer':'Planifier'}</button>
@@ -257,12 +274,15 @@ function renderForm(v){
     syncDraft();renderForm(v);
   };
   v.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{syncDraft();d.files.splice(+b.dataset.rm,1);renderForm(v);});
+  v.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>{syncDraft();d.repeat=b.dataset.rep;renderForm(v);});
+  v.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{syncDraft();const n=+b.dataset.day;d.days=(d.days||[]).includes(n)?d.days.filter(x=>x!==n):[...(d.days||[]),n];renderForm(v);});
   $('#save').onclick=async()=>{
     syncDraft();
+    if(d.repeat==='days'&&!(d.days||[]).length)return toast('Choisissez au moins un jour');
     if(!d.files.length&&!d.caption.trim())return toast('Ajoutez une photo, une vidéo ou un texte');
     if(!d.date)return toast('Choisissez une date');
     const old=d.id?(await DB.all()).find(p=>p.id===d.id):null;
-    await DB.put({id:d.id||uid(),files:d.files,caption:d.caption.trim(),date:d.date,time:d.time,done:old?.done||false,doneAt:old?.doneAt||null,created:old?.created||Date.now()});
+    await DB.put({id:d.id||uid(),files:d.files,caption:d.caption.trim(),date:d.date,time:d.time,repeat:d.repeat||'none',days:d.days||[],doneDates:old?.doneDates||[],done:old?.done||false,doneAt:old?.doneAt||null,created:old?.created||Date.now()});
     toast(d.id?'Modifié ✓':'Planifié ✓');draft=null;tab='plan';filter='todo';render();
   };
   if($('#cancel'))$('#cancel').onclick=()=>{draft=null;tab='plan';render();};
@@ -299,7 +319,9 @@ function askDone(p){
 }
 async function markDone(id,done){
   const p=(await DB.all()).find(x=>x.id===id);if(!p)return;
-  p.done=done;p.doneAt=done?Date.now():null;await DB.put(p);toast(done?'Publié ✓':'Remis à publier');render();
+  if(isRec(p)){const t=todayStr();p.doneDates=(p.doneDates||[]).filter(x=>x!==t);if(done)p.doneDates.push(t);}
+  else{p.done=done;p.doneAt=done?Date.now():null;}
+  await DB.put(p);toast(done?'Publié ✓':'Remis à publier');render();
 }
 
 /* ---------- Actions sur les cartes ---------- */

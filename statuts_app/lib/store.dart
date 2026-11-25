@@ -15,7 +15,11 @@ class Post {
     this.time = '',
     this.done = false,
     this.doneAt,
-  });
+    this.repeat = 'none',
+    List<int>? days,
+    List<String>? doneDates,
+  })  : days = days ?? [],
+        doneDates = doneDates ?? [];
 
   final String id;
   List<String> files; // chemins relatifs au dossier média
@@ -24,6 +28,27 @@ class Post {
   String time; // HH:mm ou vide
   bool done;
   int? doneAt;
+  String repeat; // 'none' | 'daily' | 'days'
+  List<int> days; // jours de la semaine (1 = lundi … 7 = dimanche) si repeat == 'days'
+  List<String> doneDates; // jours déjà publiés (statuts récurrents)
+
+  bool get recurring => repeat != 'none';
+  bool runsOn(DateTime d) => repeat == 'daily' || (repeat == 'days' && days.contains(d.weekday));
+  bool doneOn(String ds) => recurring ? doneDates.contains(ds) : done;
+
+  /// À publier le jour [d] ? (statut ponctuel : jusqu'à publication ; récurrent : les jours prévus)
+  bool dueOn(DateTime d) {
+    final ds = ymd(d);
+    if (recurring) return date.compareTo(ds) <= 0 && runsOn(d) && !doneDates.contains(ds);
+    return !done && date.compareTo(ds) <= 0;
+  }
+
+  String get repeatLabel {
+    if (repeat == 'daily') return 'Chaque jour';
+    const n = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+    final d = [...days]..sort();
+    return d.map((i) => n[i - 1]).join(', ');
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -33,6 +58,9 @@ class Post {
         'time': time,
         'done': done,
         'doneAt': doneAt,
+        'repeat': repeat,
+        'days': days,
+        'doneDates': doneDates,
       };
 
   factory Post.fromJson(Map<String, dynamic> j) => Post(
@@ -43,6 +71,9 @@ class Post {
         time: (j['time'] ?? '') as String,
         done: (j['done'] ?? false) as bool,
         doneAt: j['doneAt'] as int?,
+        repeat: (j['repeat'] ?? 'none') as String,
+        days: List<int>.from((j['days'] ?? []) as List),
+        doneDates: List<String>.from((j['doneDates'] ?? []) as List),
       );
 }
 

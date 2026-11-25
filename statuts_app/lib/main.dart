@@ -213,8 +213,8 @@ class _HomeState extends State<Home> {
   void refresh() => setState(() {});
 
   List<Post> get due {
-    final t = ymd(DateTime.now());
-    return st.posts.where((e) => !e.done && e.date.compareTo(t) <= 0).toList();
+    final now = DateTime.now();
+    return st.posts.where((e) => e.dueOn(now)).toList();
   }
 
   void toast(String m) =>
@@ -255,8 +255,15 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> setDone(Post post, bool done) async {
-    post.done = done;
-    post.doneAt = done ? DateTime.now().millisecondsSinceEpoch : null;
+    if (post.recurring) {
+      // Statut récurrent : on coche seulement le jour d'aujourd'hui.
+      final t = ymd(DateTime.now());
+      post.doneDates.remove(t);
+      if (done) post.doneDates.add(t);
+    } else {
+      post.done = done;
+      post.doneAt = done ? DateTime.now().millisecondsSinceEpoch : null;
+    }
     await st.save();
     refresh();
     toast(done ? 'Publié ✓' : 'Remis à publier');
@@ -359,9 +366,10 @@ class _HomeState extends State<Home> {
     }
     final t = ymd(DateTime.now());
     if (tab == 0) {
-      final doneToday = st.posts.where((e) =>
-          e.done && e.doneAt != null && ymd(DateTime.fromMillisecondsSinceEpoch(e.doneAt!)) == t);
-      final next = st.posts.where((e) => !e.done && e.date.compareTo(t) > 0).firstOrNull;
+      final doneToday = st.posts.where((e) => e.recurring
+          ? e.doneDates.contains(t)
+          : e.done && e.doneAt != null && ymd(DateTime.fromMillisecondsSinceEpoch(e.doneAt!)) == t);
+      final next = st.posts.where((e) => !e.recurring && !e.done && e.date.compareTo(t) > 0).firstOrNull;
       return ListView(padding: const EdgeInsets.all(16), children: [
         if (due.isEmpty)
           Padding(
@@ -380,8 +388,9 @@ class _HomeState extends State<Home> {
         if (doneToday.isNotEmpty) ...[_h('Publiés aujourd\'hui'), ...doneToday.map(_card)],
       ]);
     }
+    final recurring = filter == 'done' ? <Post>[] : st.posts.where((e) => e.recurring).toList();
     final list = st.posts
-        .where((e) => filter == 'todo' ? !e.done : filter == 'done' ? e.done : true)
+        .where((e) => !e.recurring && (filter == 'todo' ? !e.done : filter == 'done' ? e.done : true))
         .toList();
     if (filter == 'done') list.sort((a, b) => b.date.compareTo(a.date));
     final kids = <Widget>[
@@ -391,7 +400,11 @@ class _HomeState extends State<Home> {
       ]),
       const SizedBox(height: 8),
     ];
-    if (list.isEmpty) {
+    if (recurring.isNotEmpty) {
+      kids.add(_h('🔁 Statuts récurrents'));
+      kids.addAll(recurring.map(_card));
+    }
+    if (list.isEmpty && recurring.isEmpty) {
       kids.add(const Padding(padding: EdgeInsets.all(48), child: Center(child: Text('Aucun statut ici.'))));
     }
     var last = '';
@@ -412,7 +425,8 @@ class _HomeState extends State<Home> {
 
   Widget _card(Post post) {
     final t = ymd(DateTime.now());
-    final late = !post.done && post.date.compareTo(t) < 0;
+    final isDone = post.doneOn(t);
+    final late = !post.recurring && !post.done && post.date.compareTo(t) < 0;
     final cs = Theme.of(context).colorScheme;
     final lots = (post.files.length / batch).ceil();
     return Card(
@@ -434,14 +448,15 @@ class _HomeState extends State<Home> {
           if (post.files.isNotEmpty) const SizedBox(height: 8),
           if (post.caption.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(post.caption)),
           Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            if (post.done) const Chip(label: Text('✓ Publié'), visualDensity: VisualDensity.compact)
+            if (post.recurring) Chip(label: Text('🔁 ${post.repeatLabel}'), backgroundColor: cs.tertiaryContainer, visualDensity: VisualDensity.compact),
+            if (isDone) Chip(label: Text(post.recurring ? '✓ Publié aujourd\'hui' : '✓ Publié'), visualDensity: VisualDensity.compact)
             else if (late) Chip(label: const Text('En retard'), backgroundColor: cs.errorContainer, visualDensity: VisualDensity.compact)
-            else if (post.date == t) Chip(label: const Text('Aujourd\'hui'), backgroundColor: cs.primaryContainer, visualDensity: VisualDensity.compact),
-            Text('${fmtDate(post.date)}${post.time.isEmpty ? '' : ' · ${post.time}'} · ${post.files.length} fichier${post.files.length > 1 ? 's' : ''}',
+            else if (!post.recurring && post.date == t) Chip(label: const Text('Aujourd\'hui'), backgroundColor: cs.primaryContainer, visualDensity: VisualDensity.compact),
+            Text('${post.recurring ? 'Dès le ${fmtDate(post.date)}' : fmtDate(post.date)}${post.time.isEmpty ? '' : ' · ${post.time}'} · ${post.files.length} fichier${post.files.length > 1 ? 's' : ''}',
                 style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
           ]),
           const SizedBox(height: 8),
-          if (!post.done)
+          if (!isDone)
             for (var l = 0; l < (lots == 0 ? 1 : lots); l++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -461,7 +476,7 @@ class _HomeState extends State<Home> {
                 ),
               ),
           Wrap(spacing: 4, children: [
-            if (!post.done && post.caption.isNotEmpty)
+            if (!isDone && post.caption.isNotEmpty)
               TextButton.icon(
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: post.caption));
@@ -469,7 +484,7 @@ class _HomeState extends State<Home> {
                   },
                   icon: const Icon(Icons.copy, size: 18),
                   label: const Text('Légende')),
-            if (!post.done)
+            if (!isDone)
               TextButton.icon(onPressed: () => setDone(post, true), icon: const Icon(Icons.check, size: 18), label: const Text('Publié'))
             else
               TextButton.icon(onPressed: () => setDone(post, false), icon: const Icon(Icons.undo, size: 18), label: const Text('Remettre à publier')),
@@ -539,6 +554,8 @@ class _PostFormState extends State<PostForm> {
   late final TextEditingController cap;
   late DateTime date;
   TimeOfDay? time;
+  String repeat = 'none';
+  final Set<int> days = {};
   bool busy = false;
 
   @override
@@ -549,6 +566,8 @@ class _PostFormState extends State<PostForm> {
     existing = [...?e?.files];
     cap = TextEditingController(text: e?.caption ?? '');
     date = e != null ? DateTime.parse(e.date) : DateTime.now();
+    repeat = e?.repeat ?? 'none';
+    days.addAll(e?.days ?? const []);
     if (e != null && e.time.isNotEmpty) {
       final s = e.time.split(':');
       time = TimeOfDay(hour: int.parse(s[0]), minute: int.parse(s[1]));
@@ -571,6 +590,7 @@ class _PostFormState extends State<PostForm> {
 
   Future<void> save() async {
     if (count == 0 && cap.text.trim().isEmpty) return _msg('Ajoutez une photo, une vidéo ou un texte');
+    if (repeat == 'days' && days.isEmpty) return _msg('Choisissez au moins un jour');
     setState(() => busy = true);
     final st = widget.store;
     Post? post = widget.post;
@@ -584,6 +604,8 @@ class _PostFormState extends State<PostForm> {
       ..files = [...existing, ...added]
       ..caption = cap.text.trim()
       ..date = ymd(date)
+      ..repeat = repeat
+      ..days = (days.toList()..sort())
       ..time = time == null ? '' : '${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}';
     if (isNew) st.posts.add(post);
     await st.save();
@@ -634,12 +656,43 @@ class _PostFormState extends State<PostForm> {
         maxLines: 8,
         decoration: const InputDecoration(labelText: 'Légende / texte', border: OutlineInputBorder()),
       ),
+      const SizedBox(height: 16),
+      const Text('Répétition', style: TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      SegmentedButton<String>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: 'none', label: Text('Une fois')),
+          ButtonSegment(value: 'daily', label: Text('Chaque jour')),
+          ButtonSegment(value: 'days', label: Text('Jours choisis')),
+        ],
+        selected: {repeat},
+        onSelectionChanged: (v) => setState(() => repeat = v.first),
+      ),
+      if (repeat == 'days') ...[
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, children: [
+          for (var i = 1; i <= 7; i++)
+            FilterChip(
+              label: Text(const ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i - 1]),
+              selected: days.contains(i),
+              onSelected: (v) => setState(() => v ? days.add(i) : days.remove(i)),
+            ),
+        ]),
+      ],
+      if (repeat != 'none')
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text('Ce statut réapparaîtra dans « Aujourd\'hui » chaque matin prévu, '
+              'et restera dans l\'appli pour être republié.',
+              style: TextStyle(fontSize: 12)),
+        ),
       const SizedBox(height: 12),
       Row(children: [
         Expanded(
           child: OutlinedButton.icon(
             icon: const Icon(Icons.event),
-            label: Text('${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}'),
+            label: Text('${repeat == 'none' ? '' : 'Dès le '}${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}'),
             onPressed: () async {
               final d = await showDatePicker(
                   context: context,
