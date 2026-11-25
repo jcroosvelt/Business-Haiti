@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -579,21 +579,27 @@ class _PostFormState extends State<PostForm> {
   Future<void> pick() async {
     final room = kMaxFiles - count;
     if (room <= 0) return _msg('Maximum $kMaxFiles fichiers par statut');
-    // Ouvre directement la galerie (sélecteur de photos/vidéos), pas le gestionnaire de fichiers.
-    final picker = ImagePicker();
-    List<XFile> r;
+    // Galerie intégrée à l'app : photos et vidéos du téléphone, sélection multiple.
+    List<AssetEntity>? assets;
     try {
-      if (room == 1) {
-        final one = await picker.pickMedia();
-        r = one == null ? [] : [one];
-      } else {
-        r = await picker.pickMultipleMedia(limit: room);
-      }
+      assets = await AssetPicker.pickAssets(
+        context,
+        pickerConfig: AssetPickerConfig(
+          maxAssets: room,
+          requestType: RequestType.common,
+          gridCount: 4,
+        ),
+      );
     } catch (e) {
       return _msg('Galerie indisponible : $e');
     }
-    if (r.isEmpty) return;
-    final paths = r.map((f) => f.path).toList();
+    if (assets == null || assets.isEmpty) return;
+    final paths = <String>[];
+    for (final a in assets) {
+      final f = await a.originFile;
+      if (f != null) paths.add(f.path);
+    }
+    if (paths.isEmpty) return _msg('Impossible de lire les fichiers choisis');
     if (paths.length > room) _msg('Seuls $room fichiers ajoutés (maximum $kMaxFiles)');
     setState(() => picked.addAll(paths.take(room)));
   }

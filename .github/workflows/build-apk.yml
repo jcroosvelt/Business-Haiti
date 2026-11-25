@@ -33,6 +33,9 @@ jobs:
           flutter create --platforms=android --org ht.businesshaiti --project-name statuts_app "$RUNNER_TEMP/scaffold"
           cp -r "$RUNNER_TEMP/scaffold/android" statuts_app/android
           sed -i 's/android:label="[^"]*"/android:label="Statuts"/' statuts_app/android/app/src/main/AndroidManifest.xml
+          # Permissions pour lire la galerie (Android 13+ et anciennes versions)
+          sed -i 's#<application#<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' statuts_app/android/app/src/main/AndroidManifest.xml
+          grep -n "uses-permission" statuts_app/android/app/src/main/AndroidManifest.xml
 
       # Certains plugins sont compilés avec un compileSdk trop ancien : on force 36 partout.
       - name: Forcer compileSdk 36
