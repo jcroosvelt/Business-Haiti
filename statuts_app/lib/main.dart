@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -579,9 +579,21 @@ class _PostFormState extends State<PostForm> {
   Future<void> pick() async {
     final room = kMaxFiles - count;
     if (room <= 0) return _msg('Maximum $kMaxFiles fichiers par statut');
-    final r = await FilePicker.platform.pickFiles(type: FileType.media, allowMultiple: true);
-    if (r == null) return;
-    final paths = r.files.map((f) => f.path).whereType<String>().toList();
+    // Ouvre directement la galerie (sélecteur de photos/vidéos), pas le gestionnaire de fichiers.
+    final picker = ImagePicker();
+    List<XFile> r;
+    try {
+      if (room == 1) {
+        final one = await picker.pickMedia();
+        r = one == null ? [] : [one];
+      } else {
+        r = await picker.pickMultipleMedia(limit: room);
+      }
+    } catch (e) {
+      return _msg('Galerie indisponible : $e');
+    }
+    if (r.isEmpty) return;
+    final paths = r.map((f) => f.path).toList();
     if (paths.length > room) _msg('Seuls $room fichiers ajoutés (maximum $kMaxFiles)');
     setState(() => picked.addAll(paths.take(room)));
   }
@@ -609,10 +621,6 @@ class _PostFormState extends State<PostForm> {
       ..time = time == null ? '' : '${time!.hour.toString().padLeft(2, '0')}:${time!.minute.toString().padLeft(2, '0')}';
     if (isNew) st.posts.add(post);
     await st.save();
-    // Nettoie les copies temporaires du sélecteur de fichiers.
-    try {
-      await FilePicker.platform.clearTemporaryFiles();
-    } catch (_) {}
     if (!mounted) return;
     widget.onDone();
   }
