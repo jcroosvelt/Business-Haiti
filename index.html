@@ -94,6 +94,7 @@ dialog h3{margin:0 0 8px}
 
 <header>
   <h1 id="title">Aujourd'hui</h1>
+  <button id="settings" title="Réglages" aria-label="Réglages">⚙️</button>
   <button id="lockNow" title="Verrouiller" aria-label="Verrouiller">🔒</button>
 </header>
 
@@ -154,18 +155,27 @@ $('#lockForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const v=$('#pin').value, has=store.get('pinhash');
   if(has){
-    if(await sha(v)===has){$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();}
+    if(await sha(v)===has){store.set('locked','0');$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();}
     else{$('#lockErr').textContent='Code incorrect';$('#pin').value='';}
   }else{
     if(v.length<4)return $('#lockErr').textContent='Au moins 4 caractères';
     if(v!==$('#pin2').value)return $('#lockErr').textContent='Les codes ne correspondent pas';
-    store.set('pinhash',await sha(v));$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();
+    store.set('pinhash',await sha(v));store.set('locked','0');$('#lock').classList.add('hidden');unlocked=true;resetIdle();render();
   }
 });
-$('#lockNow').onclick=showLock;
-function resetIdle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(unlocked)showLock()},5*60*1000);}
+const autolock=()=>store.get('autolock')==='1';
+$('#lockNow').onclick=()=>{store.set('locked','1');showLock();};
+$('#settings').onclick=()=>{
+  const dlg=$('#dlg');
+  dlg.innerHTML=`<h3>Réglages</h3>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-weight:400"><input type="checkbox" id="al" ${autolock()?'checked':''} style="margin-top:4px"><span>Demander le code à chaque ouverture<br><small style="color:var(--muted)">Désactivé : le code n'est demandé qu'après le bouton 🔒.</small></span></label>
+    <div class="row" style="margin-top:16px"><button class="btn primary" id="ok" style="flex:1">OK</button></div>`;
+  dlg.showModal();
+  $('#ok').onclick=()=>{store.set('autolock',$('#al').checked?'1':'0');dlg.close();};
+};
+function resetIdle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(unlocked&&autolock())showLock()},5*60*1000);}
 ['click','touchstart','keydown'].forEach(ev=>addEventListener(ev,()=>unlocked&&resetIdle(),{passive:true}));
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&unlocked){hiddenAt=Date.now()}else if(!document.hidden&&unlocked&&hiddenAt&&Date.now()-hiddenAt>60000)showLock();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&unlocked){hiddenAt=Date.now()}else if(!document.hidden&&unlocked&&autolock()&&hiddenAt&&Date.now()-hiddenAt>60000)showLock();});
 let hiddenAt=0;
 
 /* ---------- Récurrence ---------- */
@@ -355,7 +365,8 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
 (async()=>{
   try{await DB.open();}catch{document.body.innerHTML='<p style="padding:24px">Stockage local indisponible (navigation privée ?). Ouvrez l\'appli dans un onglet normal.</p>';return;}
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-  showLock();
+  if(store.get('pinhash')&&!autolock()&&store.get('locked')!=='1'){unlocked=true;$('#lock').classList.add('hidden');render();}
+  else showLock();
 })();
 </script>
 </body>

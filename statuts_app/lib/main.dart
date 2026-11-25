@@ -72,6 +72,11 @@ class _GateState extends State<Gate> with WidgetsBindingObserver {
     setState(() {
       prefs = pr;
       store = st;
+      // Le code n'est demandé qu'à la création, après un verrouillage manuel (🔒),
+      // ou à chaque ouverture si l'option est activée dans les réglages.
+      unlocked = pr.getString('pin') != null &&
+          !(pr.getBool('autolock') ?? false) &&
+          !(pr.getBool('locked') ?? false);
     });
   }
 
@@ -85,8 +90,9 @@ class _GateState extends State<Gate> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState s) {
     if (s == AppLifecycleState.paused) pausedAt = DateTime.now();
     if (s == AppLifecycleState.resumed && pausedAt != null) {
-      // Pas de reverrouillage pendant le partage vers WhatsApp (< 2 min).
-      if (DateTime.now().difference(pausedAt!) > const Duration(minutes: 2)) {
+      // Reverrouillage automatique seulement si l'option est activée (et pas pendant un partage < 2 min).
+      if ((prefs?.getBool('autolock') ?? false) &&
+          DateTime.now().difference(pausedAt!) > const Duration(minutes: 2)) {
         setState(() => unlocked = false);
       }
       pausedAt = null;
@@ -101,7 +107,10 @@ class _GateState extends State<Gate> with WidgetsBindingObserver {
     if (!unlocked) {
       return LockScreen(prefs: prefs!, onUnlock: () => setState(() => unlocked = true));
     }
-    return Home(store: store!, prefs: prefs!, onLock: () => setState(() => unlocked = false));
+    return Home(store: store!, prefs: prefs!, onLock: () {
+      prefs!.setBool('locked', true);
+      setState(() => unlocked = false);
+    });
   }
 }
 
@@ -122,6 +131,7 @@ class _LockScreenState extends State<LockScreen> {
   void submit() {
     if (hasPin) {
       if (_hash(pin.text) == widget.prefs.getString('pin')) {
+        widget.prefs.setBool('locked', false);
         widget.onUnlock();
       } else {
         setState(() => err = 'Code incorrect');
@@ -131,6 +141,7 @@ class _LockScreenState extends State<LockScreen> {
       if (pin.text.length < 4) return setState(() => err = 'Au moins 4 caractères');
       if (pin.text != pin2.text) return setState(() => err = 'Les codes ne correspondent pas');
       widget.prefs.setString('pin', _hash(pin.text));
+      widget.prefs.setBool('locked', false);
       widget.onUnlock();
     }
   }
@@ -289,22 +300,32 @@ class _HomeState extends State<Home> {
 
   Future<void> batchDialog() async {
     var v = batch.toDouble();
+    var auto = widget.prefs.getBool('autolock') ?? false;
     await showDialog<void>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, set) => AlertDialog(
-          title: const Text('Fichiers par envoi'),
+          title: const Text('Réglages'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             const Text('Si WhatsApp refuse ou coupe un envoi trop gros, diminuez ce nombre : '
                 'un statut de plus de fichiers sera alors partagé en plusieurs lots.'),
             Slider(value: v, min: 5, max: 50, divisions: 9, label: v.round().toString(),
                 onChanged: (x) => set(() => v = x)),
-            Text('${v.round()} fichiers'),
+            Text('${v.round()} fichiers par envoi'),
+            const Divider(height: 24),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Demander le code à chaque ouverture'),
+              subtitle: const Text('Désactivé : le code n\'est demandé qu\'après le bouton 🔒.'),
+              value: auto,
+              onChanged: (x) => set(() => auto = x),
+            ),
           ]),
           actions: [
             TextButton(
                 onPressed: () {
                   widget.prefs.setInt('batch', v.round());
+                  widget.prefs.setBool('autolock', auto);
                   Navigator.pop(c);
                   refresh();
                 },
@@ -325,7 +346,7 @@ class _HomeState extends State<Home> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         actions: [
-          IconButton(icon: const Icon(Icons.tune), tooltip: 'Fichiers par envoi', onPressed: batchDialog),
+          IconButton(icon: const Icon(Icons.tune), tooltip: 'Réglages', onPressed: batchDialog),
           IconButton(icon: const Icon(Icons.lock_outline), tooltip: 'Verrouiller', onPressed: widget.onLock),
         ],
       ),
@@ -710,11 +731,14 @@ class _PostFormState extends State<PostForm> {
             icon: const Icon(Icons.event),
             label: Text('${repeat == 'none' ? '' : 'Dès le '}${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}'),
             onPressed: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
               final d = await showDatePicker(
                   context: context,
+                  initialEntryMode: DatePickerEntryMode.calendarOnly,
                   initialDate: date,
                   firstDate: DateTime.now().subtract(const Duration(days: 365)),
                   lastDate: DateTime.now().add(const Duration(days: 730)));
+              FocusManager.instance.primaryFocus?.unfocus();
               if (d != null) setState(() => date = d);
             },
           ),
@@ -725,7 +749,12 @@ class _PostFormState extends State<PostForm> {
             icon: const Icon(Icons.schedule),
             label: Text(time == null ? 'Heure (option)' : time!.format(context)),
             onPressed: () async {
-              final t = await showTimePicker(context: context, initialTime: time ?? TimeOfDay.now());
+              FocusManager.instance.primaryFocus?.unfocus();
+              final t = await showTimePicker(
+                  context: context,
+                  initialEntryMode: TimePickerEntryMode.dial,
+                  initialTime: time ?? TimeOfDay.now());
+              FocusManager.instance.primaryFocus?.unfocus();
               if (t != null) setState(() => time = t);
             },
           ),
